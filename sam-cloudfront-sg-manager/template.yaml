@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Lambda Function to update tagged Security Groups with new CloudFront IPs whey they're updated in AWS's SNS feed
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: cloudfront-sg-manager
+    Description: Lambda Function to update tagged Security Groups with new CloudFront IPs whey they're updated in AWS's SNS feed
+    Author: Alex Hibbitt
+    SpdxLicenseId: Apache-2.0
+    LicenseUrl: LICENSE.txt 
+    ReadmeUrl: README.md
+    Labels: ['cloudfront', 'waf', 'sam', 'sre']
+    HomePageUrl: https://github.com/ahibbitt/cloudfront_sg_manager/tree/master/sam-cloudfront-sg-manager/
+    SemanticVersion: 1.0.0
+    SourceCodeUrl: https://github.com/ahibbitt/cloudfront_sg_manager/tree/master/sam-cloudfront-sg-manager/
+
+Parameters:
+  Service:
+    Type: String
+    Default: "CLOUDFRONT"
+  IngressPorts:
+    Type: String
+    Default: "{ 'Http': 80, 'Https': 443 }"
+  SGTagsGlobalHTTP:
+    Type: String
+    Default: "{ 'cloudfront_global': 'true', 'AutoUpdate': 'true', 'Protocol': 'http' }"
+  SGTagsGlobalHTTPS:
+    Type: String
+    Default: "{ 'cloudfront_global': 'true', 'AutoUpdate': 'true', 'Protocol': 'https' }"
+  SGTagsRegionalHTTP:
+    Type: String
+    Default: "{ 'cloudfront_regional': 'true', 'AutoUpdate': 'true', 'Protocol': 'http' }"
+  SGTagsRegionalHTTPS:
+    Type: String
+    Default: "{ 'cloudfront_regional': 'true', 'AutoUpdate': 'true', 'Protocol': 'https' }"
+  SNSTopicARN:
+    Type: String
+    Default: "arn:aws:sns:us-east-1:806199016981:AmazonIpSpaceChanged"
+Globals:
+  Function:
+    Timeout: 300
+
+Resources:
+  CloudFrontSGManagerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: cloudfront-sg-manager/
+      Handler: app.lambda_handler
+      Policies:
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: 'arn:aws:logs:*:*:*'
+          - Effect: Allow
+            Action:
+              - ec2:DescribeSecurityGroups
+              - ec2:AuthorizeSecurityGroupIngress
+              - ec2:RevokeSecurityGroupIngress
+            Resource: '*'
+      Runtime: python3.7
+      Events:
+        CloudFrontIPSNSUpdate:
+          Type: SNS
+          Properties:
+            Topic: !Ref SNSTopicARN
+            Region: us-east-1
+      Environment:
+        Variables:
+          SERVICE: !Ref Service
+          INGRESS_PORTS: !Ref IngressPorts
+          SG_TAGS_GLOBAL_HTTP: !Ref SGTagsGlobalHTTP
+          SG_TAGS_GLOBAL_HTTPS: !Ref SGTagsGlobalHTTPS
+          SG_TAGS_REGIONAL_HTTP: !Ref SGTagsRegionalHTTP
+          SG_TAGS_REGIONAL_HTTPS: !Ref SGTagsRegionalHTTPS
